@@ -1,0 +1,4 @@
+dataset,file_pattern,key_column,dataset_type,measure_column,schema,source_table,load_from_files,file_name_column,file_date_expr,arrival_ts_expr,source_type,source_location
+Customer,[Cc]ustomer*.csv,Customer_ID,master,,Customer_ID:string|Customer_Name:string|Region:string|Email:string|Created_Date:date,{catalog}.default.customers,Y,source_file,,file_arrival_ts,CSV files (Unity Catalog volume),
+Product,[Pp]roduct*.csv,Product_ID,master,,Product_ID:string|Product_Name:string|Category:string|Price:double|Launch_Date:date,{catalog}.default.product,Y,source_file,,file_arrival_ts,CSV files (Unity Catalog volume),
+Sales,[Ss]ales*.csv,Sales_ID,transaction,Revenue,Sales_ID:string|Sale_Date:date|Customer_ID:string|Product_ID:string|Quantity:int|Revenue:double,{catalog}.default.sales,Y,source_file,,file_arrival_ts,CSV files (Unity Catalog volume),

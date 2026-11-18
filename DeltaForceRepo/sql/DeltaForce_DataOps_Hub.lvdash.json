@@ -1,0 +1,4856 @@
+{
+  "datasets": [
+    {
+      "name": "kpi_exec",
+      "displayName": "KPIs: executive overview",
+      "queryLines": [
+        "SELECT\n",
+        "  (SELECT CAST(overall_trust_score AS DOUBLE) FROM team_9.default.vw_trust_overall_daily\n",
+        "   ORDER BY file_date DESC LIMIT 1) AS trust_latest,\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_alerts WHERE status = 'OPEN' AND file_date = (SELECT MAX(file_date) FROM team_9.default.vw_alerts)) AS open_alerts_latest,\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_alerts WHERE severity = 'Critical') AS critical_alerts,\n",
+        "  (SELECT CAST(ROUND(100 * SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END)\n",
+        "          / SUM(CASE WHEN status IN ('PASS', 'FAIL') THEN 1 ELSE 0 END), 1) AS DOUBLE)\n",
+        "   FROM team_9.default.vw_dq_rule_results) AS dq_pass_rate,\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_job_health WHERE status = 'FAILED'\n",
+        "   AND run_date = (SELECT MAX(run_date) FROM team_9.default.vw_job_health)) AS jobs_failed_latest,\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_file_arrivals WHERE arrival_status = 'MISSING') AS files_missing,\n",
+        "  (SELECT CAST(SUM(quarantined_measure + held_measure) AS DOUBLE) FROM team_9.default.vw_revenue_before_after) AS revenue_kept_out"
+      ]
+    },
+    {
+      "name": "kpi_dq",
+      "displayName": "KPIs: data quality",
+      "queryLines": [
+        "SELECT\n",
+        "  SUM(CASE WHEN status IN ('PASS', 'FAIL') THEN 1 ELSE 0 END) AS rules_executed,\n",
+        "  SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) AS rules_passed,\n",
+        "  SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END) AS rules_failed,\n",
+        "  CAST(ROUND(100 * SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END)\n",
+        "       / SUM(CASE WHEN status IN ('PASS', 'FAIL') THEN 1 ELSE 0 END), 1) AS DOUBLE) AS pass_pct,\n",
+        "  SUM(CASE WHEN status = 'FAIL' AND severity IN ('Critical', 'High') THEN 1 ELSE 0 END) AS critical_failures\n",
+        "FROM team_9.default.vw_dq_rule_results"
+      ]
+    },
+    {
+      "name": "kpi_alerts",
+      "displayName": "KPIs: alerts and anomalies",
+      "queryLines": [
+        "SELECT\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_alerts WHERE status = 'OPEN') AS active_alerts,\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_alerts WHERE severity = 'Critical') AS critical_alerts,\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_alerts WHERE category = 'trend' AND file_date = (SELECT MAX(file_date) FROM team_9.default.vw_alerts)) AS new_anomalies_latest,\n",
+        "  (SELECT COUNT(*) FROM team_9.default.vw_detection_scorecard WHERE caught) AS seeded_caught"
+      ]
+    },
+    {
+      "name": "kpi_files",
+      "displayName": "KPIs: source monitoring",
+      "queryLines": [
+        "SELECT a.*, b.source_trust_latest\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    COUNT(*) AS files_expected,\n",
+        "    SUM(CASE WHEN arrival_status <> 'MISSING' THEN 1 ELSE 0 END) AS files_received,\n",
+        "    SUM(CASE WHEN arrival_status = 'LATE' THEN 1 ELSE 0 END) AS files_delayed,\n",
+        "    SUM(CASE WHEN arrival_status = 'MISSING' THEN 1 ELSE 0 END) AS files_missing,\n",
+        "    CAST(ROUND(100 * SUM(CASE WHEN arrival_status = 'ON_TIME' THEN 1 ELSE 0 END) / COUNT(*), 1) AS DOUBLE) AS sla_pct\n",
+        "  FROM team_9.default.vw_file_arrivals\n",
+        ") a\n",
+        "CROSS JOIN (\n",
+        "  SELECT CAST(source_trust AS DOUBLE) AS source_trust_latest\n",
+        "  FROM team_9.default.vw_trust_overall_daily ORDER BY file_date DESC LIMIT 1\n",
+        ") b"
+      ]
+    },
+    {
+      "name": "kpi_jobs",
+      "displayName": "KPIs: job monitoring",
+      "queryLines": [
+        "SELECT a.*, b.job_trust_latest\n",
+        "FROM (\n",
+        "  SELECT\n",
+        "    COUNT(*) AS total_runs,\n",
+        "    SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS successful_runs,\n",
+        "    SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed_runs,\n",
+        "    CAST(ROUND(AVG(duration_min), 1) AS DOUBLE) AS avg_runtime_min\n",
+        "  FROM team_9.default.vw_job_health\n",
+        ") a\n",
+        "CROSS JOIN (\n",
+        "  SELECT CAST(job_trust AS DOUBLE) AS job_trust_latest\n",
+        "  FROM team_9.default.vw_trust_overall_daily ORDER BY file_date DESC LIMIT 1\n",
+        ") b"
+      ]
+    },
+    {
+      "name": "kpi_revenue",
+      "displayName": "KPIs: revenue impact",
+      "queryLines": [
+        "SELECT\n",
+        "  CAST(SUM(reported_without_hub) AS DOUBLE) AS revenue_before,\n",
+        "  CAST(SUM(certified_by_hub) AS DOUBLE) AS revenue_after,\n",
+        "  CAST(SUM(reported_without_hub) - SUM(certified_by_hub) AS DOUBLE) AS revenue_difference,\n",
+        "  CAST(ROUND(100 * (SUM(reported_without_hub) - SUM(certified_by_hub)) / SUM(reported_without_hub), 1) AS DOUBLE)\n",
+        "    AS impact_pct\n",
+        "FROM team_9.default.vw_revenue_before_after"
+      ]
+    },
+    {
+      "name": "kpi_trust",
+      "displayName": "KPIs: trust score",
+      "queryLines": [
+        "WITH o AS (\n",
+        "  SELECT CAST(overall_trust_score AS DOUBLE) AS score, CAST(source_trust AS DOUBLE) AS source_trust,\n",
+        "         CAST(data_trust AS DOUBLE) AS data_trust, CAST(job_trust AS DOUBLE) AS job_trust,\n",
+        "         ROW_NUMBER() OVER (ORDER BY file_date DESC) AS rn\n",
+        "  FROM team_9.default.vw_trust_overall_daily\n",
+        ")\n",
+        "SELECT\n",
+        "  MAX(CASE WHEN rn = 1 THEN score END) AS trust_latest,\n",
+        "  MAX(CASE WHEN rn = 1 THEN source_trust END) AS source_trust_latest,\n",
+        "  MAX(CASE WHEN rn = 1 THEN data_trust END) AS data_trust_latest,\n",
+        "  MAX(CASE WHEN rn = 1 THEN job_trust END) AS job_trust_latest,\n",
+        "  MAX(CASE WHEN rn = 1 THEN score END) - MAX(CASE WHEN rn = 2 THEN score END) AS change_vs_previous\n",
+        "FROM o"
+      ]
+    },
+    {
+      "name": "ds_trust_overall",
+      "displayName": "Overall trust score by day",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, CAST(overall_trust_score AS DOUBLE) AS overall_trust_score,\n",
+        "       overall_status, CAST(alerts AS BIGINT) AS alerts, CAST(critical_alerts AS BIGINT) AS critical_alerts,\n",
+        "       weakest_dataset, CAST(source_trust AS DOUBLE) AS source_trust, CAST(data_trust AS DOUBLE) AS data_trust,\n",
+        "       CAST(job_trust AS DOUBLE) AS job_trust\n",
+        "FROM team_9.default.vw_trust_overall_daily\n",
+        "ORDER BY file_day"
+      ]
+    },
+    {
+      "name": "ds_trust_layers",
+      "displayName": "Trust by layer",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, '1 Overall (source + data)' AS layer,\n",
+        "       CAST(overall_trust_score AS DOUBLE) AS score FROM team_9.default.vw_trust_overall_daily\n",
+        "UNION ALL\n",
+        "SELECT date_format(file_date, 'yyyy-MM-dd'), '2 Source', CAST(source_trust AS DOUBLE) FROM team_9.default.vw_trust_overall_daily\n",
+        "UNION ALL\n",
+        "SELECT date_format(file_date, 'yyyy-MM-dd'), '3 Processed data', CAST(data_trust AS DOUBLE)\n",
+        "FROM team_9.default.vw_trust_overall_daily\n",
+        "UNION ALL\n",
+        "SELECT date_format(file_date, 'yyyy-MM-dd'), '4 Jobs', CAST(job_trust AS DOUBLE) FROM team_9.default.vw_trust_overall_daily\n",
+        "ORDER BY 1, 2"
+      ]
+    },
+    {
+      "name": "ds_trust",
+      "displayName": "Trust score by dataset and day",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset,\n",
+        "       CAST(trust_score AS DOUBLE) AS trust_score, trust_status, CAST(row_quality_pct AS DOUBLE) AS row_quality_pct,\n",
+        "       CAST(total_rows AS BIGINT) AS total_rows, CAST(quarantined_rows AS BIGINT) AS quarantined_rows,\n",
+        "       CAST(alert_count AS BIGINT) AS alert_count, arrival_status, top_issue,\n",
+        "       CAST(source_trust AS DOUBLE) AS source_trust, CAST(data_trust AS DOUBLE) AS data_trust,\n",
+        "       CAST(job_trust AS DOUBLE) AS job_trust\n",
+        "FROM team_9.default.vw_trust_score_daily\n",
+        "ORDER BY file_day, dataset"
+      ]
+    },
+    {
+      "name": "ds_trust_drivers",
+      "displayName": "Trust score drivers",
+      "queryLines": [
+        "SELECT file_day, driver, CAST(SUM(points) AS DOUBLE) AS points_lost\n",
+        "FROM (\n",
+        "  SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, '1 Data quality (bad rows)' AS driver,\n",
+        "         row_penalty_points AS points\n",
+        "  FROM team_9.default.vw_trust_score_daily\n",
+        "  UNION ALL\n",
+        "  SELECT date_format(file_date, 'yyyy-MM-dd'),\n",
+        "         CASE WHEN category = 'file' THEN '2 File arrivals' ELSE '3 Anomalies (trend checks)' END,\n",
+        "         CASE severity WHEN 'Critical' THEN 50 WHEN 'High' THEN 30 WHEN 'Medium' THEN 15 WHEN 'Low' THEN 5 ELSE 0 END\n",
+        "  FROM team_9.default.vw_alerts\n",
+        "  WHERE category IN ('file', 'trend')\n",
+        ") d\n",
+        "GROUP BY file_day, driver\n",
+        "ORDER BY file_day, driver"
+      ]
+    },
+    {
+      "name": "ds_alerts",
+      "displayName": "Alert log",
+      "queryLines": [
+        "SELECT alert_id, date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset, category, severity, rule, message,\n",
+        "       observed_value, expected_value, status, CAST(severity_rank AS BIGINT) AS severity_rank,\n",
+        "       CASE\n",
+        "         WHEN rule IN ('file_missing', 'file_empty') THEN 'File missing'\n",
+        "         WHEN rule = 'file_late' THEN 'File late'\n",
+        "         WHEN rule = 'file_identical_content' THEN 'File re-sent'\n",
+        "         WHEN rule = 'sales_volume_drop' THEN 'Volume drop'\n",
+        "         WHEN rule IN ('revenue_drop', 'revenue_spike') THEN 'Revenue variance'\n",
+        "         WHEN category = 'trend' THEN 'Snapshot change'\n",
+        "         WHEN category = 'job' THEN 'Job failure or delay'\n",
+        "         ELSE 'Data quality failure'\n",
+        "       END AS alert_category,\n",
+        "       CAST(1 AS BIGINT) AS alert_one\n",
+        "FROM team_9.default.vw_alerts\n",
+        "ORDER BY file_day, severity_rank DESC, alert_id"
+      ]
+    },
+    {
+      "name": "ds_anomalies",
+      "displayName": "Anomalies by type",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day,\n",
+        "       CASE\n",
+        "         WHEN category = 'trend' AND rule LIKE '%volume%' THEN 'Volume anomaly'\n",
+        "         WHEN category = 'trend' AND rule LIKE 'revenue%' THEN 'Revenue anomaly'\n",
+        "         WHEN category = 'trend' THEN 'Snapshot change'\n",
+        "         ELSE 'Quality anomaly'\n",
+        "       END AS anomaly_type,\n",
+        "       CAST(1 AS BIGINT) AS anomaly_one\n",
+        "FROM team_9.default.vw_alerts\n",
+        "WHERE category IN ('trend', 'row', 'cross_table')\n",
+        "ORDER BY file_day"
+      ]
+    },
+    {
+      "name": "ds_trend",
+      "displayName": "Trend checks",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset, rule_name, status, observed_value,\n",
+        "       expected_value AS healthy_baseline, message\n",
+        "FROM team_9.default.vw_dq_rule_results\n",
+        "WHERE category = 'trend' AND rule_name NOT LIKE '%disappeared'\n",
+        "ORDER BY file_day, dataset, rule_name"
+      ]
+    },
+    {
+      "name": "ds_scorecard",
+      "displayName": "Detection scorecard",
+      "queryLines": [
+        "SELECT issue_id, date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset, description, rule_name, record_key,\n",
+        "       CASE WHEN official_scenario = 'Y' THEN 'Official scenario' ELSE 'Extra finding' END AS source,\n",
+        "       CASE WHEN caught THEN 'Caught' ELSE 'Missed' END AS result, alert_id, severity\n",
+        "FROM team_9.default.vw_detection_scorecard\n",
+        "ORDER BY issue_id"
+      ]
+    },
+    {
+      "name": "ds_rules",
+      "displayName": "Quality rule results",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset, category, rule_name, status,\n",
+        "       CAST(failed_count AS BIGINT) AS failed_count,\n",
+        "       CAST(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END AS BIGINT) AS failed_rule\n",
+        "FROM team_9.default.vw_dq_rule_results\n",
+        "ORDER BY file_day, dataset, rule_name"
+      ]
+    },
+    {
+      "name": "ds_dq_by_dataset",
+      "displayName": "Rule pass rate by dataset",
+      "queryLines": [
+        "SELECT dataset,\n",
+        "       CAST(ROUND(100 * SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) / COUNT(*), 1) AS DOUBLE) AS pass_pct\n",
+        "FROM team_9.default.vw_dq_rule_results\n",
+        "WHERE status IN ('PASS', 'FAIL')\n",
+        "GROUP BY dataset\n",
+        "ORDER BY dataset"
+      ]
+    },
+    {
+      "name": "ds_top_failed",
+      "displayName": "Top failed rules",
+      "queryLines": [
+        "SELECT rule_name, dataset, category, severity, CAST(SUM(failed_count) AS BIGINT) AS failure_count,\n",
+        "       CAST(COUNT(*) AS BIGINT) AS days_failed\n",
+        "FROM team_9.default.vw_dq_rule_results\n",
+        "WHERE status = 'FAIL'\n",
+        "GROUP BY rule_name, dataset, category, severity\n",
+        "ORDER BY failure_count DESC, days_failed DESC, rule_name"
+      ]
+    },
+    {
+      "name": "ds_failed_records",
+      "displayName": "Failed records",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset, rule_name, severity, action, record_key,\n",
+        "       failed_value, file_name\n",
+        "FROM team_9.default.dq_failed_rows\n",
+        "ORDER BY file_day, dataset, rule_name, record_key"
+      ]
+    },
+    {
+      "name": "ds_dimensions",
+      "displayName": "Pass rate by data quality dimension",
+      "queryLines": [
+        "SELECT dimension, CAST(ROUND(100 * SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) / COUNT(*), 1) AS DOUBLE)\n",
+        "         AS pass_pct,\n",
+        "       CAST(COUNT(*) AS BIGINT) AS checks, CAST(SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END) AS BIGINT) AS failed\n",
+        "FROM team_9.default.vw_dq_rule_results\n",
+        "WHERE status IN ('PASS', 'FAIL')\n",
+        "GROUP BY dimension\n",
+        "UNION ALL\n",
+        "SELECT 'Timeliness', CAST(ROUND(100 * SUM(CASE WHEN arrival_status = 'ON_TIME' THEN 1 ELSE 0 END) / COUNT(*), 1)\n",
+        "         AS DOUBLE),\n",
+        "       CAST(COUNT(*) AS BIGINT), CAST(SUM(CASE WHEN arrival_status <> 'ON_TIME' THEN 1 ELSE 0 END) AS BIGINT)\n",
+        "FROM team_9.default.vw_file_arrivals\n",
+        "ORDER BY 1"
+      ]
+    },
+    {
+      "name": "ds_columns",
+      "displayName": "Quality by column",
+      "queryLines": [
+        "SELECT dataset, column_name, CONCAT_WS(', ', SORT_ARRAY(COLLECT_SET(dimension))) AS dimensions,\n",
+        "       CAST(COUNT(*) AS BIGINT) AS checks,\n",
+        "       CAST(SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END) AS BIGINT) AS failed_checks,\n",
+        "       CAST(SUM(CASE WHEN status = 'FAIL' THEN failed_count ELSE 0 END) AS BIGINT) AS failed_records,\n",
+        "       CAST(ROUND(100 * SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) / COUNT(*), 1) AS DOUBLE) AS pass_pct\n",
+        "FROM team_9.default.vw_dq_rule_results\n",
+        "WHERE status IN ('PASS', 'FAIL') AND column_name IS NOT NULL\n",
+        "GROUP BY dataset, column_name\n",
+        "ORDER BY failed_records DESC, failed_checks DESC, dataset, column_name"
+      ]
+    },
+    {
+      "name": "ds_sources",
+      "displayName": "Source inventory",
+      "queryLines": [
+        "SELECT dataset, source_type, source_location, expected_time, CAST(grace_minutes AS BIGINT) AS grace_minutes,\n",
+        "       CAST(deliveries_expected AS BIGINT) AS deliveries_expected,\n",
+        "       CAST(deliveries_received AS BIGINT) AS deliveries_received,\n",
+        "       CAST(deliveries_late AS BIGINT) AS deliveries_late, CAST(deliveries_missing AS BIGINT) AS deliveries_missing,\n",
+        "       CAST(on_time_pct AS DOUBLE) AS on_time_pct, latest_status,\n",
+        "       CAST(source_trust_latest AS DOUBLE) AS source_trust_latest, CAST(source_trust_avg AS DOUBLE) AS source_trust_avg\n",
+        "FROM team_9.default.vw_source_inventory\n",
+        "ORDER BY dataset"
+      ]
+    },
+    {
+      "name": "ds_files",
+      "displayName": "File arrivals",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset, file_name,\n",
+        "       date_format(expected_ts, 'HH:mm') AS expected_time, date_format(actual_ts, 'HH:mm') AS actual_time,\n",
+        "       CAST(COALESCE(delay_minutes, 0) AS DOUBLE) AS delay_minutes, CAST(row_count AS BIGINT) AS row_count,\n",
+        "       arrival_status, CASE WHEN identical_to_previous THEN 'Yes' ELSE 'No' END AS identical_to_previous,\n",
+        "       CAST(1 AS BIGINT) AS file_one\n",
+        "FROM team_9.default.vw_file_arrivals\n",
+        "ORDER BY file_day, dataset"
+      ]
+    },
+    {
+      "name": "ds_files_delayed",
+      "displayName": "Files delayed or missing",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset, COALESCE(file_name, 'not received') AS file_name,\n",
+        "       date_format(expected_ts, 'HH:mm') AS expected_time, COALESCE(date_format(actual_ts, 'HH:mm'), '-') AS actual_time,\n",
+        "       CAST(COALESCE(delay_minutes, 0) AS DOUBLE) AS delay_minutes, arrival_status\n",
+        "FROM team_9.default.vw_file_arrivals\n",
+        "WHERE arrival_status IN ('LATE', 'MISSING', 'EMPTY')\n",
+        "ORDER BY file_day, dataset"
+      ]
+    },
+    {
+      "name": "ds_jobs",
+      "displayName": "Job runs",
+      "queryLines": [
+        "SELECT date_format(run_date, 'yyyy-MM-dd') AS run_day, job_name, dataset, status,\n",
+        "       date_format(start_ts, 'HH:mm') AS start_time, date_format(end_ts, 'HH:mm') AS end_time,\n",
+        "       CAST(duration_min AS DOUBLE) AS duration_min, issues, source, CAST(1 AS BIGINT) AS run_one\n",
+        "FROM team_9.default.vw_job_health\n",
+        "ORDER BY run_day, job_name"
+      ]
+    },
+    {
+      "name": "ds_jobs_failed",
+      "displayName": "Failed jobs",
+      "queryLines": [
+        "SELECT date_format(run_date, 'yyyy-MM-dd') AS run_day, job_name, date_format(end_ts, 'HH:mm') AS failure_time,\n",
+        "       COALESCE(error_message, '') AS error_message, source\n",
+        "FROM team_9.default.vw_job_health\n",
+        "WHERE status = 'FAILED'\n",
+        "ORDER BY run_day, job_name"
+      ]
+    },
+    {
+      "name": "ds_jobs_slow",
+      "displayName": "Long-running and late jobs",
+      "queryLines": [
+        "SELECT date_format(run_date, 'yyyy-MM-dd') AS run_day, job_name,\n",
+        "       CASE issue WHEN 'job_long_running' THEN 'Long-running' WHEN 'job_sla_breach' THEN 'Finished late (SLA)'\n",
+        "            ELSE issue END AS issue,\n",
+        "       observed_value, expected_value, message\n",
+        "FROM team_9.default.job_monitor_results\n",
+        "WHERE issue IN ('job_long_running', 'job_sla_breach')\n",
+        "ORDER BY run_day, job_name"
+      ]
+    },
+    {
+      "name": "ds_revenue_compare",
+      "displayName": "Revenue before and after",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, 'Revenue before (as received)' AS measure,\n",
+        "       CAST(reported_without_hub AS DOUBLE) AS amount FROM team_9.default.vw_revenue_before_after\n",
+        "UNION ALL\n",
+        "SELECT date_format(file_date, 'yyyy-MM-dd'), 'Revenue after (certified)', CAST(certified_by_hub AS DOUBLE)\n",
+        "FROM team_9.default.vw_revenue_before_after\n",
+        "ORDER BY 1, 2"
+      ]
+    },
+    {
+      "name": "ds_revenue_parts",
+      "displayName": "Where the difference went",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, '1 Certified (reportable)' AS revenue_part,\n",
+        "       CAST(certified_by_hub AS DOUBLE) AS amount FROM team_9.default.vw_revenue_before_after\n",
+        "UNION ALL\n",
+        "SELECT date_format(file_date, 'yyyy-MM-dd'), '2 Quarantined (bad rows)', CAST(quarantined_measure AS DOUBLE)\n",
+        "FROM team_9.default.vw_revenue_before_after\n",
+        "UNION ALL\n",
+        "SELECT date_format(file_date, 'yyyy-MM-dd'), '3 Held for review', CAST(held_measure AS DOUBLE)\n",
+        "FROM team_9.default.vw_revenue_before_after\n",
+        "ORDER BY 1, 2"
+      ]
+    },
+    {
+      "name": "ds_revenue_region",
+      "displayName": "Revenue by region, before and after",
+      "queryLines": [
+        "WITH cust AS (\n",
+        "  SELECT _file_date, Customer_ID, MAX(Region) AS region\n",
+        "  FROM team_9.default.raw_customer\n",
+        "  WHERE Customer_ID IS NOT NULL\n",
+        "  GROUP BY _file_date, Customer_ID\n",
+        "),\n",
+        "rev_before AS (\n",
+        "  SELECT COALESCE(c.region, 'Unknown customer') AS region, try_cast(s.Revenue AS DOUBLE) AS amount\n",
+        "  FROM team_9.default.raw_sales s LEFT JOIN cust c ON s._file_date = c._file_date AND s.Customer_ID = c.Customer_ID\n",
+        "),\n",
+        "rev_after AS (\n",
+        "  SELECT COALESCE(c.region, 'Unknown customer') AS region, s.Revenue AS amount\n",
+        "  FROM team_9.default.certified_sales s LEFT JOIN cust c ON s._file_date = c._file_date AND s.Customer_ID = c.Customer_ID\n",
+        "  WHERE s.certification_status = 'CERTIFIED'\n",
+        ")\n",
+        "SELECT region, 'Revenue before (as received)' AS measure, CAST(COALESCE(SUM(amount), 0) AS DOUBLE) AS amount FROM rev_before GROUP BY region\n",
+        "UNION ALL\n",
+        "SELECT region, 'Revenue after (certified)', CAST(COALESCE(SUM(amount), 0) AS DOUBLE) FROM rev_after GROUP BY region\n",
+        "ORDER BY 1, 2"
+      ]
+    },
+    {
+      "name": "ds_cert",
+      "displayName": "Certification summary",
+      "queryLines": [
+        "SELECT date_format(file_date, 'yyyy-MM-dd') AS file_day, dataset,\n",
+        "       CAST(raw_rows AS BIGINT) AS raw_rows, CAST(certified_rows AS BIGINT) AS certified_rows,\n",
+        "       CAST(quarantined_rows AS BIGINT) AS quarantined_rows, CAST(held_rows AS BIGINT) AS held_rows,\n",
+        "       CAST(released_rows AS BIGINT) AS released_rows,\n",
+        "       CAST(raw_measure AS DOUBLE) AS raw_revenue, CAST(certified_measure AS DOUBLE) AS certified_revenue\n",
+        "FROM team_9.default.certification_summary\n",
+        "ORDER BY file_day, dataset"
+      ]
+    },
+    {
+      "name": "ds_quarantine",
+      "displayName": "Quarantined sales rows",
+      "queryLines": [
+        "SELECT date_format(_file_date, 'yyyy-MM-dd') AS file_day, Sales_ID, Sale_Date, Customer_ID, Product_ID, Quantity,\n",
+        "       Revenue, CONCAT_WS(', ', _dq_rules_failed) AS reasons, _review_status AS review_status,\n",
+        "       COALESCE(_reviewed_by, '') AS reviewed_by\n",
+        "FROM team_9.default.quarantine_sales\n",
+        "ORDER BY file_day, Sales_ID"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "page_executive",
+      "displayName": "Executive overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "txt_title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Enterprise Data Operations Dashboard"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "txt_intro",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Daily visibility into data quality, trust scores, anomalies, alerts, file arrivals, job health and revenue impact, so issues are found and fixed before they reach a report. Trust **90+** safe to report, **70-89** use with caution, **below 70** do not report."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "k_trust",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_exec",
+                  "fields": [
+                    {
+                      "name": "trust_latest",
+                      "expression": "`trust_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "trust_latest",
+                  "displayName": "Overall data trust score"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Overall data trust score",
+                "showDescription": true,
+                "description": "On the latest file date; 0 to 100"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_open",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_exec",
+                  "fields": [
+                    {
+                      "name": "open_alerts_latest",
+                      "expression": "`open_alerts_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "open_alerts_latest",
+                  "displayName": "Open alerts today"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Open alerts today",
+                "showDescription": true,
+                "description": "On the latest file date"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_crit",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_exec",
+                  "fields": [
+                    {
+                      "name": "critical_alerts",
+                      "expression": "`critical_alerts`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "critical_alerts",
+                  "displayName": "Critical alerts"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Critical alerts",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_pass",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_exec",
+                  "fields": [
+                    {
+                      "name": "dq_pass_rate",
+                      "expression": "`dq_pass_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "dq_pass_rate",
+                  "displayName": "DQ pass rate (%)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "DQ pass rate (%)",
+                "showDescription": true,
+                "description": "Quality rules passed, all days"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_jobs",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_exec",
+                  "fields": [
+                    {
+                      "name": "jobs_failed_latest",
+                      "expression": "`jobs_failed_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "jobs_failed_latest",
+                  "displayName": "Jobs failed today"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Jobs failed today",
+                "showDescription": true,
+                "description": "On the latest file date"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_missing",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_exec",
+                  "fields": [
+                    {
+                      "name": "files_missing",
+                      "expression": "`files_missing`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "files_missing",
+                  "displayName": "Files missing"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Files missing",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 6,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_rev",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_exec",
+                  "fields": [
+                    {
+                      "name": "revenue_kept_out",
+                      "expression": "`revenue_kept_out`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "revenue_kept_out",
+                  "displayName": "Revenue impact"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Revenue impact",
+                "showDescription": true,
+                "description": "Revenue kept out of reports: quarantined plus held"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 6,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_trust_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_trust_overall",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(overall_trust_score)",
+                      "expression": "SUM(`overall_trust_score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(overall_trust_score)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Trust score"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Trust score trend",
+                "showDescription": true,
+                "description": "Lowest dataset score each day"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_open_sev",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_alerts",
+                  "fields": [
+                    {
+                      "name": "sum(alert_one)",
+                      "expression": "SUM(`alert_one`)"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "sum(alert_one)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Alerts"
+                },
+                "color": {
+                  "fieldName": "severity",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Severity"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Open alerts by severity"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_health",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_trust_overall",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "overall_trust_score",
+                      "expression": "`overall_trust_score`"
+                    },
+                    {
+                      "name": "overall_status",
+                      "expression": "`overall_status`"
+                    },
+                    {
+                      "name": "source_trust",
+                      "expression": "`source_trust`"
+                    },
+                    {
+                      "name": "data_trust",
+                      "expression": "`data_trust`"
+                    },
+                    {
+                      "name": "job_trust",
+                      "expression": "`job_trust`"
+                    },
+                    {
+                      "name": "alerts",
+                      "expression": "`alerts`"
+                    },
+                    {
+                      "name": "critical_alerts",
+                      "expression": "`critical_alerts`"
+                    },
+                    {
+                      "name": "weakest_dataset",
+                      "expression": "`weakest_dataset`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "overall_trust_score",
+                    "displayName": "Trust score"
+                  },
+                  {
+                    "fieldName": "overall_status",
+                    "displayName": "Status"
+                  },
+                  {
+                    "fieldName": "source_trust",
+                    "displayName": "Source trust"
+                  },
+                  {
+                    "fieldName": "data_trust",
+                    "displayName": "Data trust"
+                  },
+                  {
+                    "fieldName": "job_trust",
+                    "displayName": "Job trust"
+                  },
+                  {
+                    "fieldName": "alerts",
+                    "displayName": "Alerts"
+                  },
+                  {
+                    "fieldName": "critical_alerts",
+                    "displayName": "Critical"
+                  },
+                  {
+                    "fieldName": "weakest_dataset",
+                    "displayName": "Weakest dataset"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Daily health summary",
+                "showDescription": true,
+                "description": "Lowest score across datasets, per layer"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ]
+    },
+    {
+      "name": "page_quality",
+      "displayName": "Data quality",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "k_exec",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_dq",
+                  "fields": [
+                    {
+                      "name": "rules_executed",
+                      "expression": "`rules_executed`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "rules_executed",
+                  "displayName": "Total rules executed"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Total rules executed",
+                "showDescription": true,
+                "description": "Rule checks with a result"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_passed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_dq",
+                  "fields": [
+                    {
+                      "name": "rules_passed",
+                      "expression": "`rules_passed`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "rules_passed",
+                  "displayName": "Passed rules"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Passed rules",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_failed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_dq",
+                  "fields": [
+                    {
+                      "name": "rules_failed",
+                      "expression": "`rules_failed`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "rules_failed",
+                  "displayName": "Failed rules"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Failed rules",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_passpct",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_dq",
+                  "fields": [
+                    {
+                      "name": "pass_pct",
+                      "expression": "`pass_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "pass_pct",
+                  "displayName": "Pass %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Pass %",
+                "showDescription": true,
+                "description": "Passed / executed"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_critfail",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_dq",
+                  "fields": [
+                    {
+                      "name": "critical_failures",
+                      "expression": "`critical_failures`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "critical_failures",
+                  "displayName": "Critical failures"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Critical failures",
+                "showDescription": true,
+                "description": "Critical or High"
+              }
+            }
+          },
+          "position": {
+            "x": 10,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_by_dataset",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_dq_by_dataset",
+                  "fields": [
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "sum(pass_pct)",
+                      "expression": "SUM(`pass_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "dataset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Dataset"
+                },
+                "y": {
+                  "fieldName": "sum(pass_pct)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Pass %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Rule pass rate by dataset",
+                "showDescription": true,
+                "description": "Domains come from monitored_datasets.csv"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_by_dimension",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_dimensions",
+                  "fields": [
+                    {
+                      "name": "dimension",
+                      "expression": "`dimension`"
+                    },
+                    {
+                      "name": "sum(pass_pct)",
+                      "expression": "SUM(`pass_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "dimension",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Dimension"
+                },
+                "y": {
+                  "fieldName": "sum(pass_pct)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Pass %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Pass rate by data quality dimension",
+                "showDescription": true,
+                "description": "Completeness, uniqueness, validity, integrity, consistency, timeliness, anomalies"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_fail_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_rules",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(failed_rule)",
+                      "expression": "SUM(`failed_rule`)"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(failed_rule)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Failed rules"
+                },
+                "color": {
+                  "fieldName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Layer"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Failed rules trend",
+                "showDescription": true,
+                "description": "By layer: row, cross_table and trend"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_columns",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_columns",
+                  "fields": [
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "column_name",
+                      "expression": "`column_name`"
+                    },
+                    {
+                      "name": "dimensions",
+                      "expression": "`dimensions`"
+                    },
+                    {
+                      "name": "checks",
+                      "expression": "`checks`"
+                    },
+                    {
+                      "name": "failed_checks",
+                      "expression": "`failed_checks`"
+                    },
+                    {
+                      "name": "failed_records",
+                      "expression": "`failed_records`"
+                    },
+                    {
+                      "name": "pass_pct",
+                      "expression": "`pass_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "column_name",
+                    "displayName": "Column"
+                  },
+                  {
+                    "fieldName": "dimensions",
+                    "displayName": "Dimensions"
+                  },
+                  {
+                    "fieldName": "checks",
+                    "displayName": "Checks"
+                  },
+                  {
+                    "fieldName": "failed_checks",
+                    "displayName": "Failed checks"
+                  },
+                  {
+                    "fieldName": "failed_records",
+                    "displayName": "Failed records"
+                  },
+                  {
+                    "fieldName": "pass_pct",
+                    "displayName": "Pass %"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Quality by column",
+                "showDescription": true,
+                "description": "Which columns fail most"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_top_failed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_top_failed",
+                  "fields": [
+                    {
+                      "name": "rule_name",
+                      "expression": "`rule_name`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "failure_count",
+                      "expression": "`failure_count`"
+                    },
+                    {
+                      "name": "days_failed",
+                      "expression": "`days_failed`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "rule_name",
+                    "displayName": "Rule name"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "category",
+                    "displayName": "Layer"
+                  },
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity"
+                  },
+                  {
+                    "fieldName": "failure_count",
+                    "displayName": "Failure count"
+                  },
+                  {
+                    "fieldName": "days_failed",
+                    "displayName": "Days failed"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top failed rules"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_failed_records",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_failed_records",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "rule_name",
+                      "expression": "`rule_name`"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "action",
+                      "expression": "`action`"
+                    },
+                    {
+                      "name": "record_key",
+                      "expression": "`record_key`"
+                    },
+                    {
+                      "name": "failed_value",
+                      "expression": "`failed_value`"
+                    },
+                    {
+                      "name": "file_name",
+                      "expression": "`file_name`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "rule_name",
+                    "displayName": "Rule"
+                  },
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity"
+                  },
+                  {
+                    "fieldName": "action",
+                    "displayName": "Action"
+                  },
+                  {
+                    "fieldName": "record_key",
+                    "displayName": "Record"
+                  },
+                  {
+                    "fieldName": "failed_value",
+                    "displayName": "Failed value"
+                  },
+                  {
+                    "fieldName": "file_name",
+                    "displayName": "File"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Failed records drill-down",
+                "showDescription": true,
+                "description": "Exactly which record failed which rule"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "page_alerts",
+      "displayName": "Alerts and anomalies",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "k_active",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_alerts",
+                  "fields": [
+                    {
+                      "name": "active_alerts",
+                      "expression": "`active_alerts`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "active_alerts",
+                  "displayName": "Active alerts"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Active alerts",
+                "showDescription": true,
+                "description": "Status OPEN"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_crit2",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_alerts",
+                  "fields": [
+                    {
+                      "name": "critical_alerts",
+                      "expression": "`critical_alerts`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "critical_alerts",
+                  "displayName": "Critical alerts"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Critical alerts",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_new_anom",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_alerts",
+                  "fields": [
+                    {
+                      "name": "new_anomalies_latest",
+                      "expression": "`new_anomalies_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "new_anomalies_latest",
+                  "displayName": "New anomalies today"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "New anomalies today",
+                "showDescription": true,
+                "description": "On the latest file date; trend checks"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_seeded",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_alerts",
+                  "fields": [
+                    {
+                      "name": "seeded_caught",
+                      "expression": "`seeded_caught`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "seeded_caught",
+                  "displayName": "Seeded issues caught"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Seeded issues caught",
+                "showDescription": true,
+                "description": "From the detection scorecard"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_sev_split",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_alerts",
+                  "fields": [
+                    {
+                      "name": "sum(alert_one)",
+                      "expression": "SUM(`alert_one`)"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "sum(alert_one)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Alerts"
+                },
+                "color": {
+                  "fieldName": "severity",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Severity"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Alert severity split"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_anomaly_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_anomalies",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(anomaly_one)",
+                      "expression": "SUM(`anomaly_one`)"
+                    },
+                    {
+                      "name": "anomaly_type",
+                      "expression": "`anomaly_type`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(anomaly_one)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Anomalies"
+                },
+                "color": {
+                  "fieldName": "anomaly_type",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Type"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Anomaly trend",
+                "showDescription": true,
+                "description": "Volume, revenue and quality anomalies"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_categories",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_alerts",
+                  "fields": [
+                    {
+                      "name": "alert_category",
+                      "expression": "`alert_category`"
+                    },
+                    {
+                      "name": "sum(alert_one)",
+                      "expression": "SUM(`alert_one`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "alert_category",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Category"
+                },
+                "y": {
+                  "fieldName": "sum(alert_one)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Alerts"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top alert categories"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_alerts",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_alerts",
+                  "fields": [
+                    {
+                      "name": "alert_id",
+                      "expression": "`alert_id`"
+                    },
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "alert_category",
+                      "expression": "`alert_category`"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "rule",
+                      "expression": "`rule`"
+                    },
+                    {
+                      "name": "message",
+                      "expression": "`message`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "alert_id",
+                    "displayName": "Alert"
+                  },
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "alert_category",
+                    "displayName": "Category"
+                  },
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity"
+                  },
+                  {
+                    "fieldName": "rule",
+                    "displayName": "Rule"
+                  },
+                  {
+                    "fieldName": "message",
+                    "displayName": "Message"
+                  },
+                  {
+                    "fieldName": "status",
+                    "displayName": "Status"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Alert log"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 12,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "t_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_trend",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "rule_name",
+                      "expression": "`rule_name`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "observed_value",
+                      "expression": "`observed_value`"
+                    },
+                    {
+                      "name": "healthy_baseline",
+                      "expression": "`healthy_baseline`"
+                    },
+                    {
+                      "name": "message",
+                      "expression": "`message`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "rule_name",
+                    "displayName": "Check"
+                  },
+                  {
+                    "fieldName": "status",
+                    "displayName": "Result"
+                  },
+                  {
+                    "fieldName": "observed_value",
+                    "displayName": "Observed"
+                  },
+                  {
+                    "fieldName": "healthy_baseline",
+                    "displayName": "Healthy baseline"
+                  },
+                  {
+                    "fieldName": "message",
+                    "displayName": "Detail"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Trend checks",
+                "showDescription": true,
+                "description": "Volume and revenue against the median of recent healthy days"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_scorecard",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_scorecard",
+                  "fields": [
+                    {
+                      "name": "issue_id",
+                      "expression": "`issue_id`"
+                    },
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "description",
+                      "expression": "`description`"
+                    },
+                    {
+                      "name": "result",
+                      "expression": "`result`"
+                    },
+                    {
+                      "name": "source",
+                      "expression": "`source`"
+                    },
+                    {
+                      "name": "alert_id",
+                      "expression": "`alert_id`"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "issue_id",
+                    "displayName": "Issue"
+                  },
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "description",
+                    "displayName": "Seeded issue"
+                  },
+                  {
+                    "fieldName": "result",
+                    "displayName": "Result"
+                  },
+                  {
+                    "fieldName": "source",
+                    "displayName": "Source"
+                  },
+                  {
+                    "fieldName": "alert_id",
+                    "displayName": "Alert"
+                  },
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Detection scorecard"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 23,
+            "width": 12,
+            "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "page_sources",
+      "displayName": "Source monitoring",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "txt_sources",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Sources are configured in `monitored_datasets.csv`: files from a path (Unity Catalog volume, Amazon S3, ADLS Gen2) or any Unity Catalog table, including Delta Sharing, Lakehouse Federation (external databases) and data shared from other workspaces."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "k_fexp",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_files",
+                  "fields": [
+                    {
+                      "name": "files_expected",
+                      "expression": "`files_expected`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "files_expected",
+                  "displayName": "Deliveries expected"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Deliveries expected",
+                "showDescription": true,
+                "description": "Sources x days"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_frec",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_files",
+                  "fields": [
+                    {
+                      "name": "files_received",
+                      "expression": "`files_received`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "files_received",
+                  "displayName": "Received"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Received",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_fdel",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_files",
+                  "fields": [
+                    {
+                      "name": "files_delayed",
+                      "expression": "`files_delayed`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "files_delayed",
+                  "displayName": "Delayed"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Delayed",
+                "showDescription": true,
+                "description": "Beyond the grace period"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_fmiss",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_files",
+                  "fields": [
+                    {
+                      "name": "files_missing",
+                      "expression": "`files_missing`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "files_missing",
+                  "displayName": "Missing"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Missing",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_fsla",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_files",
+                  "fields": [
+                    {
+                      "name": "sla_pct",
+                      "expression": "`sla_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sla_pct",
+                  "displayName": "On-time %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "On-time %",
+                "showDescription": true,
+                "description": "On time / expected"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_fsrc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_files",
+                  "fields": [
+                    {
+                      "name": "source_trust_latest",
+                      "expression": "`source_trust_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "source_trust_latest",
+                  "displayName": "Source trust today"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Source trust today",
+                "showDescription": true,
+                "description": "On the latest file date"
+              }
+            }
+          },
+          "position": {
+            "x": 10,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "t_sources",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_sources",
+                  "fields": [
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "source_type",
+                      "expression": "`source_type`"
+                    },
+                    {
+                      "name": "source_location",
+                      "expression": "`source_location`"
+                    },
+                    {
+                      "name": "expected_time",
+                      "expression": "`expected_time`"
+                    },
+                    {
+                      "name": "grace_minutes",
+                      "expression": "`grace_minutes`"
+                    },
+                    {
+                      "name": "deliveries_received",
+                      "expression": "`deliveries_received`"
+                    },
+                    {
+                      "name": "deliveries_late",
+                      "expression": "`deliveries_late`"
+                    },
+                    {
+                      "name": "deliveries_missing",
+                      "expression": "`deliveries_missing`"
+                    },
+                    {
+                      "name": "on_time_pct",
+                      "expression": "`on_time_pct`"
+                    },
+                    {
+                      "name": "latest_status",
+                      "expression": "`latest_status`"
+                    },
+                    {
+                      "name": "source_trust_latest",
+                      "expression": "`source_trust_latest`"
+                    },
+                    {
+                      "name": "source_trust_avg",
+                      "expression": "`source_trust_avg`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Source"
+                  },
+                  {
+                    "fieldName": "source_type",
+                    "displayName": "Type"
+                  },
+                  {
+                    "fieldName": "source_location",
+                    "displayName": "Location"
+                  },
+                  {
+                    "fieldName": "expected_time",
+                    "displayName": "Expected"
+                  },
+                  {
+                    "fieldName": "grace_minutes",
+                    "displayName": "Grace (min)"
+                  },
+                  {
+                    "fieldName": "deliveries_received",
+                    "displayName": "Received"
+                  },
+                  {
+                    "fieldName": "deliveries_late",
+                    "displayName": "Late"
+                  },
+                  {
+                    "fieldName": "deliveries_missing",
+                    "displayName": "Missing"
+                  },
+                  {
+                    "fieldName": "on_time_pct",
+                    "displayName": "On-time %"
+                  },
+                  {
+                    "fieldName": "latest_status",
+                    "displayName": "Latest"
+                  },
+                  {
+                    "fieldName": "source_trust_latest",
+                    "displayName": "Source trust today"
+                  },
+                  {
+                    "fieldName": "source_trust_avg",
+                    "displayName": "Average source trust"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Source inventory"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 12,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "c_receipt",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_files",
+                  "fields": [
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "sum(file_one)",
+                      "expression": "SUM(`file_one`)"
+                    },
+                    {
+                      "name": "arrival_status",
+                      "expression": "`arrival_status`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "dataset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Source"
+                },
+                "y": {
+                  "fieldName": "sum(file_one)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Deliveries"
+                },
+                "color": {
+                  "fieldName": "arrival_status",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Status"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Delivery status by source"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_delay",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_files",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(delay_minutes)",
+                      "expression": "SUM(`delay_minutes`)"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(delay_minutes)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Minutes late"
+                },
+                "color": {
+                  "fieldName": "dataset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Source"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Minutes after expected arrival"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_delayed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_files_delayed",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "file_name",
+                      "expression": "`file_name`"
+                    },
+                    {
+                      "name": "expected_time",
+                      "expression": "`expected_time`"
+                    },
+                    {
+                      "name": "actual_time",
+                      "expression": "`actual_time`"
+                    },
+                    {
+                      "name": "delay_minutes",
+                      "expression": "`delay_minutes`"
+                    },
+                    {
+                      "name": "arrival_status",
+                      "expression": "`arrival_status`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Source"
+                  },
+                  {
+                    "fieldName": "file_name",
+                    "displayName": "Delivery"
+                  },
+                  {
+                    "fieldName": "expected_time",
+                    "displayName": "Expected"
+                  },
+                  {
+                    "fieldName": "actual_time",
+                    "displayName": "Arrived"
+                  },
+                  {
+                    "fieldName": "delay_minutes",
+                    "displayName": "Delay (min)"
+                  },
+                  {
+                    "fieldName": "arrival_status",
+                    "displayName": "Status"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Deliveries delayed beyond buffer",
+                "showDescription": true,
+                "description": "Late, missing or empty deliveries"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "t_files",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_files",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "arrival_status",
+                      "expression": "`arrival_status`"
+                    },
+                    {
+                      "name": "expected_time",
+                      "expression": "`expected_time`"
+                    },
+                    {
+                      "name": "actual_time",
+                      "expression": "`actual_time`"
+                    },
+                    {
+                      "name": "delay_minutes",
+                      "expression": "`delay_minutes`"
+                    },
+                    {
+                      "name": "row_count",
+                      "expression": "`row_count`"
+                    },
+                    {
+                      "name": "identical_to_previous",
+                      "expression": "`identical_to_previous`"
+                    },
+                    {
+                      "name": "file_name",
+                      "expression": "`file_name`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Source"
+                  },
+                  {
+                    "fieldName": "arrival_status",
+                    "displayName": "Status"
+                  },
+                  {
+                    "fieldName": "expected_time",
+                    "displayName": "Expected"
+                  },
+                  {
+                    "fieldName": "actual_time",
+                    "displayName": "Arrived"
+                  },
+                  {
+                    "fieldName": "delay_minutes",
+                    "displayName": "Delay (min)"
+                  },
+                  {
+                    "fieldName": "row_count",
+                    "displayName": "Rows"
+                  },
+                  {
+                    "fieldName": "identical_to_previous",
+                    "displayName": "Same as previous"
+                  },
+                  {
+                    "fieldName": "file_name",
+                    "displayName": "Delivery"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "All deliveries"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 19,
+            "width": 12,
+            "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "page_jobs",
+      "displayName": "Job monitoring",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "k_jtot",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_jobs",
+                  "fields": [
+                    {
+                      "name": "total_runs",
+                      "expression": "`total_runs`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "total_runs",
+                  "displayName": "Total job runs"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Total job runs",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_jok",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_jobs",
+                  "fields": [
+                    {
+                      "name": "successful_runs",
+                      "expression": "`successful_runs`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "successful_runs",
+                  "displayName": "Successful runs"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Successful runs",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_jfail",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_jobs",
+                  "fields": [
+                    {
+                      "name": "failed_runs",
+                      "expression": "`failed_runs`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "failed_runs",
+                  "displayName": "Failed runs"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Failed runs",
+                "showDescription": true,
+                "description": "All days"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_javg",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_jobs",
+                  "fields": [
+                    {
+                      "name": "avg_runtime_min",
+                      "expression": "`avg_runtime_min`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg_runtime_min",
+                  "displayName": "Average runtime (min)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Average runtime (min)",
+                "showDescription": true,
+                "description": "All runs"
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_jtrust",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_jobs",
+                  "fields": [
+                    {
+                      "name": "job_trust_latest",
+                      "expression": "`job_trust_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "job_trust_latest",
+                  "displayName": "Job trust today"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Job trust today",
+                "showDescription": true,
+                "description": "On the latest file date; failures, SLA breaches and slow runs"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_job_status",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_jobs",
+                  "fields": [
+                    {
+                      "name": "sum(run_one)",
+                      "expression": "SUM(`run_one`)"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "sum(run_one)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Runs"
+                },
+                "color": {
+                  "fieldName": "status",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Status"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Job health distribution",
+                "showDescription": true,
+                "description": "Finished runs; running jobs are not tracked"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_job_duration",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_jobs",
+                  "fields": [
+                    {
+                      "name": "run_day",
+                      "expression": "`run_day`"
+                    },
+                    {
+                      "name": "sum(duration_min)",
+                      "expression": "SUM(`duration_min`)"
+                    },
+                    {
+                      "name": "job_name",
+                      "expression": "`job_name`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "run_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(duration_min)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Minutes"
+                },
+                "color": {
+                  "fieldName": "job_name",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Job"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Job runtime by day"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 8,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_jobs_failed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_jobs_failed",
+                  "fields": [
+                    {
+                      "name": "run_day",
+                      "expression": "`run_day`"
+                    },
+                    {
+                      "name": "job_name",
+                      "expression": "`job_name`"
+                    },
+                    {
+                      "name": "failure_time",
+                      "expression": "`failure_time`"
+                    },
+                    {
+                      "name": "error_message",
+                      "expression": "`error_message`"
+                    },
+                    {
+                      "name": "source",
+                      "expression": "`source`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "run_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "job_name",
+                    "displayName": "Job name"
+                  },
+                  {
+                    "fieldName": "failure_time",
+                    "displayName": "Failure time"
+                  },
+                  {
+                    "fieldName": "error_message",
+                    "displayName": "Error"
+                  },
+                  {
+                    "fieldName": "source",
+                    "displayName": "Source"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Failed jobs"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "t_jobs_slow",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_jobs_slow",
+                  "fields": [
+                    {
+                      "name": "run_day",
+                      "expression": "`run_day`"
+                    },
+                    {
+                      "name": "job_name",
+                      "expression": "`job_name`"
+                    },
+                    {
+                      "name": "issue",
+                      "expression": "`issue`"
+                    },
+                    {
+                      "name": "observed_value",
+                      "expression": "`observed_value`"
+                    },
+                    {
+                      "name": "expected_value",
+                      "expression": "`expected_value`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "run_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "job_name",
+                    "displayName": "Job name"
+                  },
+                  {
+                    "fieldName": "issue",
+                    "displayName": "Issue"
+                  },
+                  {
+                    "fieldName": "observed_value",
+                    "displayName": "Observed"
+                  },
+                  {
+                    "fieldName": "expected_value",
+                    "displayName": "Expected"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Long-running and late jobs",
+                "showDescription": true,
+                "description": "Runs over twice their typical time, or past their SLA"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 9,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "t_jobs",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_jobs",
+                  "fields": [
+                    {
+                      "name": "run_day",
+                      "expression": "`run_day`"
+                    },
+                    {
+                      "name": "job_name",
+                      "expression": "`job_name`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "start_time",
+                      "expression": "`start_time`"
+                    },
+                    {
+                      "name": "end_time",
+                      "expression": "`end_time`"
+                    },
+                    {
+                      "name": "duration_min",
+                      "expression": "`duration_min`"
+                    },
+                    {
+                      "name": "issues",
+                      "expression": "`issues`"
+                    },
+                    {
+                      "name": "source",
+                      "expression": "`source`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "run_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "job_name",
+                    "displayName": "Job"
+                  },
+                  {
+                    "fieldName": "status",
+                    "displayName": "Status"
+                  },
+                  {
+                    "fieldName": "start_time",
+                    "displayName": "Start"
+                  },
+                  {
+                    "fieldName": "end_time",
+                    "displayName": "End"
+                  },
+                  {
+                    "fieldName": "duration_min",
+                    "displayName": "Minutes"
+                  },
+                  {
+                    "fieldName": "issues",
+                    "displayName": "Issues"
+                  },
+                  {
+                    "fieldName": "source",
+                    "displayName": "Source"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "All job runs",
+                "showDescription": true,
+                "description": "source = simulated or system_tables (real runs)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "page_revenue",
+      "displayName": "Revenue impact",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "k_rbefore",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_revenue",
+                  "fields": [
+                    {
+                      "name": "revenue_before",
+                      "expression": "`revenue_before`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "revenue_before",
+                  "displayName": "Revenue before"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Revenue before",
+                "showDescription": true,
+                "description": "As received, all days"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_rafter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_revenue",
+                  "fields": [
+                    {
+                      "name": "revenue_after",
+                      "expression": "`revenue_after`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "revenue_after",
+                  "displayName": "Revenue after"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Revenue after",
+                "showDescription": true,
+                "description": "Certified, reportable"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_rdiff",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_revenue",
+                  "fields": [
+                    {
+                      "name": "revenue_difference",
+                      "expression": "`revenue_difference`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "revenue_difference",
+                  "displayName": "Difference"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Difference",
+                "showDescription": true,
+                "description": "Kept out of reports"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_rimpact",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_revenue",
+                  "fields": [
+                    {
+                      "name": "impact_pct",
+                      "expression": "`impact_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "impact_pct",
+                  "displayName": "Impact %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Impact %",
+                "showDescription": true,
+                "description": "Difference / revenue before"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_rev_compare",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_revenue_compare",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(amount)",
+                      "expression": "SUM(`amount`)"
+                    },
+                    {
+                      "name": "measure",
+                      "expression": "`measure`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(amount)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Revenue"
+                },
+                "color": {
+                  "fieldName": "measure",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Measure"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Before vs after revenue"
+              },
+              "mark": {
+                "layout": "group"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_rev_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_revenue_compare",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(amount)",
+                      "expression": "SUM(`amount`)"
+                    },
+                    {
+                      "name": "measure",
+                      "expression": "`measure`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(amount)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Revenue"
+                },
+                "color": {
+                  "fieldName": "measure",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Measure"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Revenue trend"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_rev_region",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_revenue_region",
+                  "fields": [
+                    {
+                      "name": "region",
+                      "expression": "`region`"
+                    },
+                    {
+                      "name": "sum(amount)",
+                      "expression": "SUM(`amount`)"
+                    },
+                    {
+                      "name": "measure",
+                      "expression": "`measure`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "region",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Region"
+                },
+                "y": {
+                  "fieldName": "sum(amount)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Revenue"
+                },
+                "color": {
+                  "fieldName": "measure",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Measure"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Revenue impact by region",
+                "showDescription": true,
+                "description": "Region from the customer file of the same day"
+              },
+              "mark": {
+                "layout": "group"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_rev_parts",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_revenue_parts",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(amount)",
+                      "expression": "SUM(`amount`)"
+                    },
+                    {
+                      "name": "revenue_part",
+                      "expression": "`revenue_part`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(amount)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Revenue"
+                },
+                "color": {
+                  "fieldName": "revenue_part",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Revenue"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Where the difference went",
+                "showDescription": true,
+                "description": "Full bar = revenue as received"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 9,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_cert",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_cert",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "raw_rows",
+                      "expression": "`raw_rows`"
+                    },
+                    {
+                      "name": "certified_rows",
+                      "expression": "`certified_rows`"
+                    },
+                    {
+                      "name": "quarantined_rows",
+                      "expression": "`quarantined_rows`"
+                    },
+                    {
+                      "name": "held_rows",
+                      "expression": "`held_rows`"
+                    },
+                    {
+                      "name": "released_rows",
+                      "expression": "`released_rows`"
+                    },
+                    {
+                      "name": "raw_revenue",
+                      "expression": "`raw_revenue`"
+                    },
+                    {
+                      "name": "certified_revenue",
+                      "expression": "`certified_revenue`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "raw_rows",
+                    "displayName": "Rows received"
+                  },
+                  {
+                    "fieldName": "certified_rows",
+                    "displayName": "Certified"
+                  },
+                  {
+                    "fieldName": "quarantined_rows",
+                    "displayName": "Quarantined"
+                  },
+                  {
+                    "fieldName": "held_rows",
+                    "displayName": "Held"
+                  },
+                  {
+                    "fieldName": "released_rows",
+                    "displayName": "Released by review"
+                  },
+                  {
+                    "fieldName": "raw_revenue",
+                    "displayName": "Revenue received"
+                  },
+                  {
+                    "fieldName": "certified_revenue",
+                    "displayName": "Revenue certified"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Certification summary",
+                "showDescription": true,
+                "description": "Revenue columns apply to Sales"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_quarantine",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_quarantine",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "Sales_ID",
+                      "expression": "`Sales_ID`"
+                    },
+                    {
+                      "name": "Sale_Date",
+                      "expression": "`Sale_Date`"
+                    },
+                    {
+                      "name": "Customer_ID",
+                      "expression": "`Customer_ID`"
+                    },
+                    {
+                      "name": "Product_ID",
+                      "expression": "`Product_ID`"
+                    },
+                    {
+                      "name": "Quantity",
+                      "expression": "`Quantity`"
+                    },
+                    {
+                      "name": "Revenue",
+                      "expression": "`Revenue`"
+                    },
+                    {
+                      "name": "reasons",
+                      "expression": "`reasons`"
+                    },
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "reviewed_by",
+                      "expression": "`reviewed_by`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "Sales_ID",
+                    "displayName": "Sales ID"
+                  },
+                  {
+                    "fieldName": "Sale_Date",
+                    "displayName": "Sale date"
+                  },
+                  {
+                    "fieldName": "Customer_ID",
+                    "displayName": "Customer"
+                  },
+                  {
+                    "fieldName": "Product_ID",
+                    "displayName": "Product"
+                  },
+                  {
+                    "fieldName": "Quantity",
+                    "displayName": "Quantity"
+                  },
+                  {
+                    "fieldName": "Revenue",
+                    "displayName": "Revenue"
+                  },
+                  {
+                    "fieldName": "reasons",
+                    "displayName": "Why quarantined"
+                  },
+                  {
+                    "fieldName": "review_status",
+                    "displayName": "Review"
+                  },
+                  {
+                    "fieldName": "reviewed_by",
+                    "displayName": "Reviewed by"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Quarantined sales rows",
+                "showDescription": true,
+                "description": "Original values as received; review status from the review app"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 21,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ]
+    },
+    {
+      "name": "page_trust",
+      "displayName": "Trust score",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "k_tnow",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_trust",
+                  "fields": [
+                    {
+                      "name": "trust_latest",
+                      "expression": "`trust_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "trust_latest",
+                  "displayName": "Overall trust today"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Overall trust today",
+                "showDescription": true,
+                "description": "On the latest file date; source and data"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_tsrc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_trust",
+                  "fields": [
+                    {
+                      "name": "source_trust_latest",
+                      "expression": "`source_trust_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "source_trust_latest",
+                  "displayName": "Source trust"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Source trust",
+                "showDescription": true,
+                "description": "Delivery: late, missing, re-sent"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_tdata",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_trust",
+                  "fields": [
+                    {
+                      "name": "data_trust_latest",
+                      "expression": "`data_trust_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "data_trust_latest",
+                  "displayName": "Data trust"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Data trust",
+                "showDescription": true,
+                "description": "Processed data: bad rows, anomalies"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_tjob",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_trust",
+                  "fields": [
+                    {
+                      "name": "job_trust_latest",
+                      "expression": "`job_trust_latest`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "job_trust_latest",
+                  "displayName": "Job trust"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Job trust",
+                "showDescription": true,
+                "description": "Failures, SLA breaches, slow runs"
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_tchange",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_trust",
+                  "fields": [
+                    {
+                      "name": "change_vs_previous",
+                      "expression": "`change_vs_previous`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "change_vs_previous",
+                  "displayName": "Change vs previous day"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Change vs previous day",
+                "showDescription": true,
+                "description": "Overall, points"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_t_layers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_trust_layers",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(score)",
+                      "expression": "SUM(`score`)"
+                    },
+                    {
+                      "name": "layer",
+                      "expression": "`layer`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(score)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Trust score"
+                },
+                "color": {
+                  "fieldName": "layer",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Layer"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Trust by layer",
+                "showDescription": true,
+                "description": "Lowest dataset score each day, per layer"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_t_dataset",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_trust",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(trust_score)",
+                      "expression": "SUM(`trust_score`)"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(trust_score)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Trust score"
+                },
+                "color": {
+                  "fieldName": "dataset",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Dataset"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Overall trust by dataset"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c_t_drivers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_trust_drivers",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "sum(points_lost)",
+                      "expression": "SUM(`points_lost`)"
+                    },
+                    {
+                      "name": "driver",
+                      "expression": "`driver`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "file_day",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "sum(points_lost)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Points lost"
+                },
+                "color": {
+                  "fieldName": "driver",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Driver"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Trust score drivers",
+                "showDescription": true,
+                "description": "Points taken off the overall score, summed over datasets. Job health is scored separately as job trust."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_trust",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_trust",
+                  "fields": [
+                    {
+                      "name": "file_day",
+                      "expression": "`file_day`"
+                    },
+                    {
+                      "name": "dataset",
+                      "expression": "`dataset`"
+                    },
+                    {
+                      "name": "trust_score",
+                      "expression": "`trust_score`"
+                    },
+                    {
+                      "name": "trust_status",
+                      "expression": "`trust_status`"
+                    },
+                    {
+                      "name": "source_trust",
+                      "expression": "`source_trust`"
+                    },
+                    {
+                      "name": "data_trust",
+                      "expression": "`data_trust`"
+                    },
+                    {
+                      "name": "job_trust",
+                      "expression": "`job_trust`"
+                    },
+                    {
+                      "name": "quarantined_rows",
+                      "expression": "`quarantined_rows`"
+                    },
+                    {
+                      "name": "alert_count",
+                      "expression": "`alert_count`"
+                    },
+                    {
+                      "name": "top_issue",
+                      "expression": "`top_issue`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "file_day",
+                    "displayName": "Day"
+                  },
+                  {
+                    "fieldName": "dataset",
+                    "displayName": "Dataset"
+                  },
+                  {
+                    "fieldName": "trust_score",
+                    "displayName": "Overall"
+                  },
+                  {
+                    "fieldName": "trust_status",
+                    "displayName": "Status"
+                  },
+                  {
+                    "fieldName": "source_trust",
+                    "displayName": "Source"
+                  },
+                  {
+                    "fieldName": "data_trust",
+                    "displayName": "Data"
+                  },
+                  {
+                    "fieldName": "job_trust",
+                    "displayName": "Jobs"
+                  },
+                  {
+                    "fieldName": "quarantined_rows",
+                    "displayName": "Quarantined"
+                  },
+                  {
+                    "fieldName": "alert_count",
+                    "displayName": "Alerts"
+                  },
+                  {
+                    "fieldName": "top_issue",
+                    "displayName": "Top issue"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Trust by layer, dataset and day"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 7
+          }
+        }
+      ]
+    }
+  ]
+}

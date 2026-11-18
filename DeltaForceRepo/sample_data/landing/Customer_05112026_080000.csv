@@ -1,0 +1,9 @@
+Customer_ID,Customer_Name,Region,Email,Created_Date
+C001,ABC Retail,North,contact@abcretail.com,2026-01-15
+C002,XYZ Stores,South,info@xyzstores.com,2026-02-20
+C003,,East,sales@eastmart.com,2026-03-10
+C004,Global Traders,West,invalid_email,2026-04-05
+C005,Quick Shop,North,quickshop@email.com,2026-05-12
+C005,Quick Shop,North,quickshop@email.com,2026-05-12
+C007,Metro Retail,,metro@email.com,2026-06-10
+C008,SuperMart,South,supermart@email.com,2027-01-01

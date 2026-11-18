@@ -1,0 +1,13 @@
+command: ['streamlit', 'run', 'app.py']
+env:
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    valueFrom: 'sql-warehouse'
+  - name: 'HUB_CATALOG'
+    value: 'team_9'
+  - name: 'HUB_SCHEMA'
+    value: 'default'
+  # Optional: the job ID of the hub job, to show a "Run the hub now" button.
+  - name: 'HUB_JOB_ID'
+    value: ''
+  - name: 'STREAMLIT_GATHER_USAGE_STATS'
+    value: 'false'

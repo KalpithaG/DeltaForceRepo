@@ -1,0 +1,58 @@
+# Deploys the hub as a job in any Databricks workspace:
+#   databricks bundle deploy -t dev
+#   databricks bundle run dataops_hub -t dev
+# Not tested from the build environment: validate with `databricks bundle validate` first.
+bundle:
+  name: deltaforce_dq
+
+variables:
+  catalog:
+    description: Unity Catalog name for the hub tables
+    default: team_9
+  schema:
+    description: Schema for the hub tables
+    default: default
+  landing_path:
+    description: Volume or folder where the CSV files land
+    default: /Volumes/team_9/default/inputdata
+
+artifacts:
+  deltaforce_dq:
+    type: whl
+    build: python -m build --wheel
+    path: .
+
+resources:
+  jobs:
+    dataops_hub:
+      name: Delta Force DataOps Hub
+      tasks:
+        - task_key: run_hub
+          python_wheel_task:
+            package_name: deltaforce_dq
+            entry_point: dataops_hub
+            parameters:
+              - "--catalog"
+              - ${var.catalog}
+              - "--schema"
+              - ${var.schema}
+              - "--landing-path"
+              - ${var.landing_path}
+          environment_key: hub_env
+      environments:
+        - environment_key: hub_env
+          spec:
+            client: "2"
+            dependencies:
+              - ./dist/*.whl
+      schedule:
+        quartz_cron_expression: "0 30 8 * * ?"
+        timezone_id: Asia/Kolkata
+        pause_status: PAUSED
+
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production

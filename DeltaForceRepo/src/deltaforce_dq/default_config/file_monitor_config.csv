@@ -1,0 +1,4 @@
+dataset,expected_time,grace_minutes,arrival_time_source,severity_late,severity_missing,check_identical_content,severity_identical
+Customer,08:00:00,10,filename,Medium,Critical,N,Low
+Product,08:00:00,10,filename,Medium,Critical,N,Low
+Sales,08:00:00,10,filename,High,Critical,Y,High

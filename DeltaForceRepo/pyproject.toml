@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deltaforce_dq"
+version = "0.1.0"
+description = "Delta Force Data Quality & Monitoring Hub: config-driven, self-healing data reliability for Spark and Databricks"
+requires-python = ">=3.9"
+dependencies = []          # pyspark is provided by the cluster
+
+[project.optional-dependencies]
+local = ["pyspark>=3.5"]
+
+[project.scripts]
+dataops_hub = "deltaforce_dq.cli:main"
+dataops_datagen = "deltaforce_dq.datagen:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+deltaforce_dq = ["default_config/*.csv"]

@@ -1,0 +1,9 @@
+Product_ID,Product_Name,Category,Price,Launch_Date
+P001,SkyBolt,Lighting,500,2025-01-01
+P002,AquaSphere,Hydration,350,2025-02-01
+P003,FlexNova,Wearables,400,2025-03-01
+P004,NeoCube,Gadgets,250,2025-04-01
+P005,StarMint,Food,120,2025-05-01
+P006,CloudBand,Wearables,250,2025-05-01
+P007,QuantumBox,Technology,2000,2025-01-01
+P008,PhotonPad,Electronics,1500,2025-07-01

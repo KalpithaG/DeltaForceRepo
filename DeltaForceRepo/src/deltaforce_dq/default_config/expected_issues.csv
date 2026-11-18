@@ -1,0 +1,24 @@
+issue_id,file_date,dataset,rule_name,record_key,official_scenario,description
+I01,2026-11-05,Customer,customer_name_missing,C003,Y,Customer C003 has no name
+I02,2026-11-05,Customer,customer_email_invalid,C004,Y,Customer C004 has an invalid email
+I03,2026-11-05,Customer,customer_id_duplicate,C005,Y,Customer C005 is duplicated
+I04,2026-11-05,Customer,customer_region_missing,C007,Y,Customer C007 has no region
+I05,2026-11-05,Customer,customer_created_date_future,C008,Y,Customer C008 has a future created date
+I06,2026-11-05,Sales,invalid_customer_ref,S004,Y,Sale S004 references unknown customer C999
+I07,2026-11-05,Sales,invalid_product_ref,S005,Y,Sale S005 references unknown product P999
+I08,2026-11-05,Sales,quantity_not_positive,S006,Y,Sale S006 has a negative quantity
+I09,2026-11-05,Sales,revenue_negative,S006,Y,Sale S006 has negative revenue
+I10,2026-11-05,Sales,revenue_price_mismatch,S006,Y,Sale S006 revenue does not equal quantity x price
+I11,2026-11-05,Sales,quantity_outlier,S007,Y,Sale S007 quantity is about 100 times normal
+I12,2026-11-05,Sales,duplicate_sale,S008,Y,Sale S008 repeats sale S007
+I13,2026-11-05,Sales,sale_date_missing,S009,Y,Sale S009 has no sale date
+I14,2026-11-05,Sales,sale_date_future,S010,Y,Sale S010 is dated in the future
+I15,2026-11-06,Customer,file_late,,Y,Customer file arrived late
+I16,2026-11-07,Sales,sales_volume_drop,,Y,Sales row count dropped
+I17,2026-11-07,Sales,revenue_drop,,Y,Sales revenue dropped
+I18,2026-11-08,Sales,revenue_spike,,Y,Sales revenue spiked
+I19,2026-11-06,Customer,customer_disappeared,C007,N,Customer C007 vanished from the snapshot
+I20,2026-11-06,Customer,customer_disappeared,C008,N,Customer C008 vanished from the snapshot
+I21,2026-11-07,Customer,customer_disappeared,C009,N,Customer C009 vanished from the snapshot
+I22,2026-11-06,Product,product_disappeared,P008,N,Product P008 vanished from the snapshot
+I23,2026-11-07,Product,product_disappeared,P007,N,Product P007 vanished from the snapshot

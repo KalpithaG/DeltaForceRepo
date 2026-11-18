@@ -1,0 +1,6 @@
+job_name,dataset,schedule_time,sla_minutes,typical_duration_min,waits_for_file,criticality,sim_fail_day,sim_slow_day
+ingest_customer,Customer,08:05:00,10,4,Y,High,,
+ingest_product,Product,08:05:00,10,3,Y,High,,
+ingest_sales,Sales,08:05:00,10,5,Y,Critical,,
+dq_engine,All,08:30:00,20,8,N,High,,4
+sales_report_refresh,Sales,09:00:00,30,12,N,Critical,3,

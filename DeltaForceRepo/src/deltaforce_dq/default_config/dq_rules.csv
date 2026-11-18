@@ -1,0 +1,33 @@
+rule_id,rule_name,dataset,category,rule_type,column,params,severity,action,description,active
+CUS_R01,customer_id_missing,Customer,row,not_null,Customer_ID,,High,quarantine,Customer_ID is missing,Y
+CUS_R02,customer_id_duplicate,Customer,row,unique,Customer_ID,,High,quarantine,Customer_ID appears more than once in the file,Y
+CUS_R03,customer_name_missing,Customer,row,not_null,Customer_Name,,Medium,warn,Customer_Name is missing,Y
+CUS_R04,customer_region_missing,Customer,row,not_null,Region,,Medium,warn,Region is missing,Y
+CUS_R05,customer_email_invalid,Customer,row,regex,Email,pattern=^[^@\s]+@[^@\s]+\.[^@\s]+$,Medium,warn,Email is not a valid address,Y
+CUS_R06,customer_created_date_format,Customer,row,valid_format,Created_Date,,Medium,warn,Created_Date is not a valid date,Y
+CUS_R07,customer_created_date_future,Customer,row,not_future,Created_Date,,Medium,warn,Created_Date is after the file date,Y
+CUS_T01,customer_disappeared,Customer,trend,key_disappeared,Customer_ID,,Low,warn,Customer present in the previous snapshot is missing from this one,Y
+PRD_R01,product_id_missing,Product,row,not_null,Product_ID,,High,quarantine,Product_ID is missing,Y
+PRD_R02,product_id_duplicate,Product,row,unique,Product_ID,,High,quarantine,Product_ID appears more than once in the file,Y
+PRD_R03,product_name_missing,Product,row,not_null,Product_Name,,Medium,warn,Product_Name is missing,Y
+PRD_R04,product_price_format,Product,row,valid_format,Price,,High,quarantine,Price is not a number,Y
+PRD_R05,product_price_not_positive,Product,row,expression,Price,expr=Price > 0,High,quarantine,Price must be greater than zero,Y
+PRD_R06,product_launch_date_format,Product,row,valid_format,Launch_Date,,Medium,warn,Launch_Date is not a valid date,Y
+PRD_T01,product_disappeared,Product,trend,key_disappeared,Product_ID,,Medium,warn,Product present in the previous snapshot is missing from this one,Y
+SAL_R01,sales_id_missing,Sales,row,not_null,Sales_ID,,High,quarantine,Sales_ID is missing,Y
+SAL_R02,sales_id_duplicate,Sales,row,unique,Sales_ID,,High,quarantine,Sales_ID appears more than once in the file,Y
+SAL_R03,sale_date_missing,Sales,row,not_null,Sale_Date,,High,quarantine,Sale_Date is missing,Y
+SAL_R04,sale_date_format,Sales,row,valid_format,Sale_Date,,High,quarantine,Sale_Date is not a valid date,Y
+SAL_R05,sale_date_future,Sales,row,not_future,Sale_Date,,High,quarantine,Sale_Date is after the file date,Y
+SAL_R06,quantity_format,Sales,row,valid_format,Quantity,,High,quarantine,Quantity is not a whole number,Y
+SAL_R07,quantity_not_positive,Sales,row,expression,Quantity,expr=Quantity > 0,High,quarantine,Quantity must be greater than zero,Y
+SAL_R08,revenue_format,Sales,row,valid_format,Revenue,,High,quarantine,Revenue is not a number,Y
+SAL_R09,revenue_negative,Sales,row,expression,Revenue,expr=Revenue >= 0,High,quarantine,Revenue must not be negative,Y
+SAL_R10,duplicate_sale,Sales,row,duplicate_row,Sales_ID,columns=Sale_Date|Customer_ID|Product_ID|Quantity|Revenue,High,quarantine,Same sale repeated under a different Sales_ID,Y
+SAL_R11,quantity_outlier,Sales,row,outlier_vs_median,Quantity,factor=20,Medium,quarantine,Quantity is more than 20 times the file median,Y
+SAL_X01,invalid_customer_ref,Sales,cross_table,ref_exists,Customer_ID,ref_dataset=Customer;ref_column=Customer_ID,High,quarantine,Customer_ID not found in the Customer file,Y
+SAL_X02,invalid_product_ref,Sales,cross_table,ref_exists,Product_ID,ref_dataset=Product;ref_column=Product_ID,High,quarantine,Product_ID not found in the Product file,Y
+SAL_X03,revenue_price_mismatch,Sales,cross_table,ref_expression,Revenue,ref_dataset=Product;ref_column=Product_ID;key=Product_ID;expr=abs(Revenue - Quantity * ref_Price) <= 0.01,Medium,quarantine,Revenue does not equal Quantity x Price,Y
+SAL_T01,sales_volume_drop,Sales,trend,metric_change,,metric=row_count;drop_pct=25,High,warn,Sales row count dropped against the healthy-day baseline,Y
+SAL_T02,revenue_drop,Sales,trend,metric_change,Revenue,metric=sum;drop_pct=50,High,warn,Sales revenue dropped against the healthy-day baseline,Y
+SAL_T03,revenue_spike,Sales,trend,metric_change,Revenue,metric=sum;spike_pct=300,Critical,hold,Sales revenue spiked against the healthy-day baseline,Y
